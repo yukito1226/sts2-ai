@@ -31,7 +31,9 @@ public static class ModEntry
         ModDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "";
         _cfg = Config.Load(Path.Combine(ModDir, "Sts2Hint.config.json"));
         Vocab.Load(Path.Combine(ModDir, "vocab.txt"));
+        LiveDecision.LoadNoDownside(Path.Combine(ModDir, "no_downside_relics.txt"));
         Observation.RouteSummary = true;        // tools/hint と同じ（reset の route_summary: true）
+        Hooks.Install(new HarmonyLib.Harmony(ModId));
         _client = new HintClient("127.0.0.1", _cfg.Port);
         if (Engine.GetMainLoop() is SceneTree tree) tree.ProcessFrame += Tick;
         else Logger.Error("SceneTree が見つからないため、ヒントを更新できません");
@@ -68,7 +70,8 @@ public static class ModEntry
         _overlay!.SetStatus(c.Connected ? $"サーバー: {hello?["ckpt"]?.GetValue<string>()}（F8で隠す）" : c.Status);
         if (!c.Connected) { _lastHash = 0; return; }
 
-        var d = LiveDecision.Current(out string why);
+        LiveDecision.ResetContext(_run);
+        var d = LiveDecision.Current(_run, out string why);
         if (d == null)
         {
             if (why != _lastWhy) { _overlay.Clear(why); _lastWhy = why; }

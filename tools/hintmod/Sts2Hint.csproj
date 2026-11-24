@@ -44,7 +44,7 @@
 
   <!-- ビルド後に mods/Sts2Hint/ へ dll・マニフェスト・語彙をコピーする。既存のファイルは触らない（このフォルダだけ） -->
   <Target Name="CopyToModsFolder" AfterTargets="Build" Condition="'$(CopyToMods)' == 'true'">
-    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb;Sts2Hint.json;$(AlphaDefectRepo)/engine/catalog/vocab.txt;$(AlphaDefectRepo)/engine/catalog/aliases.txt"
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb;Sts2Hint.json;$(AlphaDefectRepo)/engine/catalog/vocab.txt;$(AlphaDefectRepo)/engine/catalog/aliases.txt;$(AlphaDefectRepo)/engine/catalog/no_downside_relics.txt"
           DestinationFolder="$(ModsPath)Sts2Hint/" />
     <Message Importance="high" Text="Sts2Hint を $(ModsPath)Sts2Hint/ にコピーしました" />
   </Target>
