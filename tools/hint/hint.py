@@ -62,9 +62,13 @@ class Session:
         log = open(a.engine_log, "ab") if a.engine_log else None
         import subprocess
         self.eng = Engine(cmd, env, log or subprocess.DEVNULL)
+        self._engine_args = (cmd, env, log or subprocess.DEVNULL)
         self.max_hp0 = None
         self.steps = 0
         self.last_hp = None
+        self.hist: list[int] = []          # これまでに選んだ手（先読み用のエンジンを今の局面に合わせるのに使う）
+        self.base_req: dict | None = None
+        self._look = None
 
     def meta(self) -> dict:
         c = self.L.config
@@ -74,7 +78,8 @@ class Session:
                 "game_version": self.game_version, "mock": bool(self.a.mock), "reset_extra": self.req_extra(),
                 "localization": self.namer.langs_found, "winprob": self.wp.describe(),
                 "model_flags": {k: v for k, v in (c.get("model") or {}).items() if isinstance(v, bool) and v},
-                "privileged_inputs": "zeroed", "search": "none"}
+                "privileged_inputs": "zeroed", "search": "none",
+                "lookahead": ({"worlds": self.a.lookahead, "top": self.a.lookahead_top} if self.a.lookahead else None)}
 
     def req_extra(self) -> dict:
         extra = dict(DEFAULT_REQ)
@@ -89,15 +94,39 @@ class Session:
         req = {"op": "reset", "mode": "run", "character": self.a.character, "ascension": self.a.ascension, "seed": self.a.seed,
                "labels": True, "snapshots": True, "route_summary": True, **self.req_extra()}
         o = parse(self.eng.request(req))
+        self.base_req = req
         self.max_hp0 = int(o.max_hp) or None
         self.steps = 0
         self.last_hp = None
+        self.hist = []
         return o
 
     def step(self, action: int):
         from sts2env.protocol import parse
         self.steps += 1
+        self.hist.append(int(action))
         return parse(self.eng.request({"op": "step", "action": int(action)}))
+
+    def lookahead(self, o, rec: dict, worlds: int | None = None) -> dict:
+        """候補ごとの「その手を選んだあとの見込み」を rec の各候補の "after" に入れる（lookahead.py）。"""
+        from engine import Engine
+        from infer import evaluate
+        from lookahead import Lookahead, LookaheadConfig
+        if self._look is None:
+            self._look = Lookahead(Engine(*self._engine_args), self.L.net, self.wp, self.base_req,
+                                   LookaheadConfig(worlds=self.a.lookahead or 4, top=self.a.lookahead_top), self.a.device)
+        if worlds:
+            self._look.cfg.worlds = worlds
+        self._look.base = self.base_req
+        out = evaluate(self.L.net, o, self.a.device)
+        t0 = time.perf_counter()
+        from sts2rl.greedy import equivalence_classes
+        res = self._look.run(o, out.probs, out.value, self.hist, len(self.hist), equivalence_classes(o))
+        for c in rec["candidates"]:
+            if c["index"] in res:
+                c["after"] = res[c["index"]]
+        rec["lookahead"] = {"worlds": self._look.cfg.worlds, "candidates": len(res), "ms": round((time.perf_counter() - t0) * 1000)}
+        return rec
 
     def hint(self, o) -> dict:
         from infer import evaluate
@@ -119,6 +148,8 @@ class Session:
 
     def close(self):
         self.eng.close()
+        if self._look is not None:
+            self._look.eng.close()
 
 
 def wanted(rec: dict, screens: set[int] | None, only_multi: bool) -> bool:
@@ -154,6 +185,7 @@ def result_of(o, steps: int, last_hp: int | None = None) -> dict:
 # ---------------------------------------------------------------- autoplay
 
 def play_one(S: Session, out: Path, screens, a) -> dict:
+    look_screens = parse_screens(a.lookahead_screens)
     n_rec = 0
     t0 = time.time()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +196,8 @@ def play_one(S: Session, out: Path, screens, a) -> dict:
             rec = S.hint(o)
             act = rec["greedy"]
             if wanted(rec, screens, not a.all_decisions):
+                if a.lookahead and rec["decision"]["num_candidates"] > 1 and wanted(rec, look_screens, True):
+                    S.lookahead(o, rec)
                 rec["chosen"] = act
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 n_rec += 1
@@ -218,7 +252,8 @@ def one_line(rec: dict) -> str:
 # ---------------------------------------------------------------- interactive
 
 HELP = """  Enter  ネットの手（1位）で進む       番号   その候補で進む（index）
-  j      この局面の JSON を表示          s      盤面を表示
+  l [N]  候補ごとの見込みを計算（N 世界） j      この局面の JSON を表示
+  s      盤面を表示
   a N    ネットの手で N 判断ぶん進む     q      終わる"""
 
 
@@ -253,6 +288,10 @@ def show(rec: dict, top_n: int) -> None:
             bits.append(f"この後ターン終了で-{f['hp_loss_if_end_turn_after']:g}HP")
         if "group_prob" in c:
             bits.append(f"同じ手の合計 {c['group_prob']:.0%}")
+        if "after" in c:
+            af = c["after"]
+            bits.append(f"見込み {af['value_delta']:+.3f}±{af['value_se']:.3f}" + (" ★" if af.get("best_by_lookahead") else "")
+                        + (f" 死亡{af['died_frac']:.0%}" if af.get("died_frac") else ""))
         print(f"  {c['rank']:>2} {c['index']:>3} {c['prob']:>6.1%}  {c['text']}" + (f"   [{', '.join(bits)}]" if bits else ""))
     if len(rec["candidates"]) > top_n:
         print(f"  …ほか {len(rec['candidates']) - top_n} 件")
@@ -261,6 +300,7 @@ def show(rec: dict, top_n: int) -> None:
 def interactive(a) -> None:
     S = Session(a)
     screens = parse_screens(a.screens)
+    look_screens = parse_screens(a.lookahead_screens)
     fh = open(a.out, "w", encoding="utf-8") if a.out else None
     if fh:
         fh.write(json.dumps({"meta": S.meta()}, ensure_ascii=False) + "\n")
@@ -273,6 +313,8 @@ def interactive(a) -> None:
             stop = wanted(rec, screens, True) and auto_left <= 0
             act = rec["greedy"]
             if stop:
+                if a.lookahead and wanted(rec, look_screens, True):
+                    S.lookahead(o, rec)
                 show(rec, a.top)
                 while True:
                     try:
@@ -283,6 +325,18 @@ def interactive(a) -> None:
                         break
                     if cmd == "q":
                         raise KeyboardInterrupt
+                    if cmd == "l" or cmd.startswith("l "):
+                        try:
+                            nw = int(cmd[1:].strip() or a.lookahead or 4)
+                        except ValueError:
+                            print("l の後には世界の数を書いてください")
+                            continue
+                        print(f"先読み中（{nw} 世界）…", flush=True)
+                        S.lookahead(o, rec, nw)
+                        show(rec, a.top)
+                        print(f"  見込み＝その手のあと（戦闘はターンの終わりまで、戦闘外は1手）の価値の、今の価値からの差。±は標準誤差。"
+                              f"★＝見込みが最大（{rec['lookahead']['ms']} ms）")
+                        continue
                     if cmd == "j":
                         print(json.dumps(rec, ensure_ascii=False, indent=1))
                         continue
@@ -345,6 +399,10 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--mock", action="store_true", help="モックエンジンを使う（テスト用）")
         p.add_argument("--allow-unlisted", action="store_true", help="チェックサム一覧にない重みも読む（テスト用）")
         p.add_argument("--max-steps", type=int, default=6000)
+        p.add_argument("--lookahead", type=int, default=0,
+                       help="候補ごとの見込みを、この数の世界（見えない未来を引き直したもの）で計算する。0 は計算しない（対話モードでは l で都度）")
+        p.add_argument("--lookahead-top", type=int, default=0, help="見込みを計算する候補の数（確率の高い順。0 は全部）")
+        p.add_argument("--lookahead-screens", default=None, help="見込みを計算する画面（例 COMBAT,CARD_REWARD）。既定は全部")
         if name == "autoplay":
             p.add_argument("--out", required=True, help="JSONL の出力先（1行目 meta、各判断1行、最後に result）。--seeds-file のときはフォルダ")
             p.add_argument("--seeds-file", default=None, help="シードの一覧（seeds/R1.json などの {\"seeds\": [...]} か、ただの配列）。続けて何局も打つ")
