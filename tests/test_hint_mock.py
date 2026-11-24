@@ -174,6 +174,7 @@ class TestAutoplay(Base):
         combat = [x for x in recs if x["decision"]["phase"] == "combat"]
         c0 = combat[0]
         self.assertIn("combat_win_prob", c0["net"])
+        self.assertTrue(all("win_prob" not in x["net"] for x in recs))          # 局全体の勝率は既定では出さない
         end = [c for c in c0["candidates"] if c["action_kind"] == 1][0]
         self.assertEqual(end["facts"]["hp_loss_if_end_turn_after"], 6.0)      # モックの敵は 6 ダメージ、ブロック 0
         strike = [c for c in c0["candidates"] if c.get("a_key") == "CARD.STRIKE_IRONCLAD"][0]

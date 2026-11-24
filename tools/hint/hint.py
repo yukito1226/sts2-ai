@@ -106,7 +106,9 @@ class Session:
         self.last_hp = int(o.hp)
         if self.max_hp0 is None:
             self.max_hp0 = int(o.max_hp) or 1
-        wp = self.wp.estimate(out.value, int(o.act), float(o.hp), float(o.max_hp), float(self.max_hp0))
+        # 局全体の勝率は、ネットが直接出す値ではない。較正表（--calib）か、概算を明示的に頼んだとき（--winprob-estimate）だけ出す
+        wp = (self.wp.estimate(out.value, int(o.act), float(o.hp), float(o.max_hp), float(self.max_hp0))
+              if (self.a.calib or self.a.winprob_estimate) else None)
         classes = equivalence_classes(o) if o.num_actions else None
         rec = self.builder.build(o, out, wp, merge_classes=classes)
         rec["step"] = self.steps
@@ -235,8 +237,6 @@ def show(rec: dict, top_n: int) -> None:
     line = f"  価値 {net['value']:+.4f}"
     if net.get("win_prob") is not None:
         line += f"  勝率（{'較正済み' if net['win_prob_method'] == 'calibrated' else '未較正の概算'}）{net['win_prob']:.1%}"
-    elif net.get("win_prob_unavailable"):
-        line += "  勝率: 推定なし"
     if net.get("combat_win_prob") is not None:
         line += f"  この戦闘に勝つ {net['combat_win_prob']:.1%}  戦闘終了までの被HP 最大HPの {net['combat_hp_loss_frac']:.0%}"
     print(line)
@@ -335,7 +335,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--threads", type=int, default=4)
         p.add_argument("--lang", default="jpn,eng", help="名前に使う翻訳の言語（ゲームの localization のフォルダ名、先にあるものを優先）")
         p.add_argument("--loc-dir", default=None, help="localization フォルダ（既定 ~/.local/share/sls2/game/<版>/res/localization）")
-        p.add_argument("--calib", default=None, help="calibrate.py で作った較正表（価値 → 勝率）")
+        p.add_argument("--calib", default=None, help="calibrate.py で作った較正表（価値 → 局全体の勝率）。渡したときだけ勝率を出す")
+        p.add_argument("--winprob-estimate", action="store_true",
+                       help="較正表なしで、重みの報酬設定から局全体の勝率を概算して出す（出せない設定の重みでは出ない。既定では出さない）")
         p.add_argument("--screens", default=None, help="この画面だけ記録・停止する（例 COMBAT,CARD_REWARD,EVENT,SHOP,REST_SITE,MAP）")
         p.add_argument("--merge-equiv", action="store_true", help="同じ手（同じカード2枚など）をまとめた確率で1位を決める（ability_test --merge-equiv と同じ）")
         p.add_argument("--engine-cmd", default=None, help="エンジンを起動するコマンド（既定は engine/Sts2Headless の Release ビルド）")

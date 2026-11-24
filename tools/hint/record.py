@@ -166,7 +166,7 @@ class Builder:
 
     # ------------------------------------------------------------ 組み立て
 
-    def build(self, o, out, wp_est: dict, chosen: int | None = None, merge_classes: list[int] | None = None,
+    def build(self, o, out, wp_est: dict | None, chosen: int | None = None, merge_classes: list[int] | None = None,
               cand_values: dict | None = None) -> dict:
         from winprob import sigmoid
         n = int(o.num_actions)
@@ -192,12 +192,12 @@ class Builder:
                 e["after"] = cand_values[c]
             cands.append(e)
         cands.sort(key=lambda x: x["rank"])
-        net = {"value": _r(out.value), "value_scalar": _r(out.v_scalar), "head": "out_of_combat" if out.is_macro else "combat",
-               "win_prob": _r(wp_est.get("p")), "win_prob_method": wp_est.get("method")}
-        if wp_est.get("note"):
-            net["win_prob_note"] = wp_est["note"]
-        if wp_est.get("reason"):
-            net["win_prob_unavailable"] = wp_est["reason"]
+        net = {"value": _r(out.value), "value_scalar": _r(out.v_scalar), "head": "out_of_combat" if out.is_macro else "combat"}
+        if wp_est and wp_est.get("p") is not None:      # 勝率は較正表か概算が使えるときだけ出す（既定では出さない）
+            net["win_prob"] = _r(wp_est["p"])
+            net["win_prob_method"] = wp_est.get("method")
+            if wp_est.get("note"):
+                net["win_prob_note"] = wp_est["note"]
         if o.in_combat and out.combat_win_logit is not None:
             net["combat_win_prob"] = _r(sigmoid(out.combat_win_logit))
             net["combat_hp_loss_frac"] = _r(out.combat_hp_loss)

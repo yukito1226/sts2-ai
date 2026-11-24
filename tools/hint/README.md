@@ -45,7 +45,6 @@ softmax → 方策の確率。1位がネットの手（評価と同じ貪欲）
             "enemies": [{"name": "ニビット#0", "hp": 30, "attack": {"per_hit": 6, "hits": 1, "total": 6}, "intents": [...]}],
             "hand": [{"name": "ストライク", "cost": 1}, ...], "relics": [...], "potions": [...]},
   "net": {"value": 0.62, "head": "combat",
-          "win_prob": 0.31, "win_prob_method": "linear", "win_prob_note": "未較正の概算 …",
           "combat_win_prob": 0.98, "combat_hp_loss_frac": 0.07},
   "candidates": [
     {"index": 3, "rank": 1, "prob": 0.41, "text": "強打 → ニビット#0", "action": "カードを使う",
@@ -61,11 +60,10 @@ softmax → 方策の確率。1位がネットの手（評価と同じ貪欲）
 
 - `prob` は方策の確率、`rank` はその順位です。同じカードが2枚あると候補が2つに分かれるので、見分けのつかない候補をまとめた確率を `group_prob` に出します（`same_as` はまとめ先の index）。
 - `net.value` は価値ヘッドの値です。**勝率ではなく「この先にもらえる報酬の合計の予測」**です。戦闘中は戦闘用、戦闘外は戦闘外用のヘッドが使われます（`head`）。特権入力（山札の順番など）はゼロにしています。
-- `net.win_prob` は勝率の推定です。`win_prob_method` で出し方を区別します。
-  - `calibrated`：`calibrate.py` で作った較正表（実際に打った局の「価値 → 勝ったか」）を使った値です。
-  - `linear`：較正表がないときの概算で、価値をクリア時の報酬で割った値です。里程碑報酬を撤去した重みでしか出しません。HPの形づけの分は仮定を置いて足し戻しています。**未較正なので、目安以上には使わないでください。**
-  - 出せないとき（里程碑報酬が残っている重みなど）は `null` になり、理由が `win_prob_unavailable` に入ります。
-- `net.combat_win_prob` と `combat_hp_loss_frac` は戦闘補助ヘッドの出力で、戦闘中だけ出ます。「この戦闘に勝つ確率」と「戦闘の終わりまでに失うHP（最大HPに対する割合）」です。学習の補助に使われていたヘッドで、行動の決定には使われていません。
+- 局全体の勝率は **既定では出しません**。ネットが直接出す値ではないためです。必要なときだけ、次のどちらかを付けると `net.win_prob` が出ます。
+  - `--calib 表.json`：`calibrate.py` で作った較正表（実際に打った局の「価値 → 勝ったか」）を使います（`win_prob_method: calibrated`）。
+  - `--winprob-estimate`：重みの報酬設定から概算します（`linear`、未較正）。里程碑報酬を撤去した重みでしか出ません。配布されている ironclad_ema_v24782 では出ません。
+- `net.combat_win_prob` と `combat_hp_loss_frac` は戦闘補助ヘッドの出力で、戦闘中だけ出ます。ネット自身が確率として出す値です。「この戦闘に勝つ確率」と「戦闘の終わりまでに失うHP（最大HPに対する割合）」です。学習の補助に使われていたヘッドで、行動の決定には使われていません。
 - `facts` はエンジンが計算した数値（`engine/Sts2Headless/Engine/Obs/Candidates.cs`）です。
   - `damage`：修正値込みの1発のダメージ、回数、合計、倒せるか（全体攻撃なら倒せる数）
   - `block`：その場で得るブロック
@@ -160,7 +158,7 @@ cd sts2-ai
        --ckpt $ALPHADEFECT_REPO/weights/files_v6/ironclad_ema_v24782.pt --seed $SEED --screens COMBAT,CARD_REWARD,EVENT,SHOP,REST_SITE
    ```
    Enter でネットの手、番号でその候補、`j` で JSON、`a 20` で20判断ぶん自動、`q` で終了です。
-8. **（任意）勝率の較正表を作る。** CPU で1局数分かかるので、夜間に回すことをおすすめします。
+8. **（任意、使わなくてよい）局全体の勝率の較正表を作る。** CPU で1局数分かかるので、夜間に回すことをおすすめします。
 
    ```bash
    ~/AlphaDefect-Public/.venv/bin/python -I tools/hint/hint.py autoplay --character IRONCLAD --ckpt ... \
@@ -180,7 +178,7 @@ cd sts2-ai
 - この重みの報酬設定は次のとおりでした。
   - `floor_reward` 0.02、`act1_boss_reward` 0.1、`act2_boss_reward` 0.5、`act3_boss_reward` 1.5、`victory_reward` 2.0、`act3_boss2_reward` 2.0
   - `milestone_from` はなく、里程碑報酬が残っています（ms_scale = 1）。`run_hp_shaping` は 0 です。
-  - このため、**価値から勝率への概算は出ず（`win_prob: null`）、勝率には較正表が要ります**（B の手順8）。1局15秒ほどなので、200局でも1時間かかりません。
+  - このため、価値から局全体の勝率は計算できません。勝率は既定で出さないことにしました（較正表を作れば出せます。B の手順8）。
 - 終局フレームのヘッダの HP は、クリアしても 0 でした。そこで `result` には、そのままの値（`hp_end_frame`）と、最後の判断のときの HP（`hp_last_decision`）の両方を書くようにしました。
 
 ### Windows で直接動かす場合
