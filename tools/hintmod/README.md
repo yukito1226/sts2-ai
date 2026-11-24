@@ -43,8 +43,9 @@ Slay the Spire 2 のプレイ中に、学習済みの AI「AlphaDefect」が各�
    ```powershell
    cd C:\work\sts2-ai
    $env:ALPHADEFECT_REPO = "C:\work\AlphaDefect-Public"
-   python -I tools\hint\server.py --ckpt C:\work\AlphaDefect-Public\weights\files_v6\ironclad_ema_v24782.pt --dump out\live
+   C:\work\AlphaDefect-Public\.venv\Scripts\python.exe -I tools\hint\server.py --ckpt C:\work\AlphaDefect-Public\weights\files_v6\ironclad_ema_v24782.pt --dump out\live
    ```
+   torch などは AlphaDefect-Public の仮想環境（`.venv`）に入っているので、その Python で起動します。素の `python` だと「No module named 'torch'」になります。
    `ヒントサーバー 127.0.0.1:8765 …` と出れば準備完了です。判断ごとに1行（画面、候補数、1位、かかった時間）が出ます。`--dump` は確認用の記録（`frames.bin` と `hints.jsonl`）で、なくてもかまいません。
 3. **ゲームを起動して、アイアンクラッドで始める。** 右上にパネルが出ます。F8 で表示・非表示を切り替えます。
    パネル下の行に「サーバー: ironclad_ema_v24782.pt」と出ていれば接続できています。
