@@ -1,0 +1,12 @@
+{
+  "id": "Sts2Hint",
+  "name": "STS2 Hint（AlphaDefect のヒント）",
+  "author": "ゆきと",
+  "description": "AlphaDefect（学習済みAI）が各候補を選ぶ確率と、この戦闘に勝つ確率を画面右上に出します。計算は同じPCで動かすヒントサーバー（tools/hint/server.py）が行います。F8で表示切替。",
+  "version": "v0.1.0",
+  "min_game_version": "0.113.1",
+  "has_pck": false,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": false
+}

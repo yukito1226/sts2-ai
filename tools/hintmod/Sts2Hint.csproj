@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Sts2Hint：AlphaDefect のヒントをゲーム画面に出す Mod。
+    観測エンコーダは AlphaDefect-Public の engine/Sts2Headless/Engine/ から、ファイルをそのまま取り込んでコンパイルする（書き換えない）。
+      dotnet build -c Release                       Windows の既定の場所（Steam、C:\work\AlphaDefect-Public）を使い、mods/Sts2Hint/ へコピー
+      dotnet build -c Release -p:Sts2Path=... -p:AlphaDefectRepo=...    場所を指定
+      dotnet build -c Release -p:CopyToMods=false   ビルドだけ
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- 取り込んだ AlphaDefect のファイルの警告は出さない -->
+    <NoWarn>$(NoWarn);CS8602;CS8600;CS8604;CS8618;CS8625;CS0162;CS0168;CS0219;CS0414;CS0649;CS0169;MSB3270</NoWarn>
+    <AlphaDefectRepo Condition="'$(AlphaDefectRepo)' == ''">$(ALPHADEFECT_REPO)</AlphaDefectRepo>
+    <AlphaDefectRepo Condition="'$(AlphaDefectRepo)' == ''">$(MSBuildProjectDirectory)/../../../AlphaDefect-Public</AlphaDefectRepo>
+    <AdEngine>$(AlphaDefectRepo)/engine/Sts2Headless/Engine</AdEngine>
+    <Sts2Path Condition="'$(Sts2Path)' == ''">C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2</Sts2Path>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">$(Sts2Path)/data_sts2_windows_x86_64</Sts2DataDir>
+    <ModsPath Condition="'$(ModsPath)' == ''">$(Sts2Path)/mods/</ModsPath>
+    <CopyToMods Condition="'$(CopyToMods)' == '' and Exists('$(ModsPath)')">true</CopyToMods>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="sts2"><HintPath>$(Sts2DataDir)/sts2.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="GodotSharp"><HintPath>$(Sts2DataDir)/GodotSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="0Harmony"><HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin/**;obj/**" />
+    <!-- 本家の Sts2Bridge と同じ取り込み方（engine/Directory.Build.targets）に、Decision と Vocab を足したもの -->
+    <Compile Include="$(AdEngine)/Observation.cs;$(AdEngine)/ObservationOracle.cs;$(AdEngine)/Decision.cs;$(AdEngine)/Vocab.cs" LinkBase="AlphaDefect" />
+    <Compile Include="$(AdEngine)/Obs/**/*.cs" LinkBase="AlphaDefect/Obs" />
+    <Compile Include="$(AdEngine)/Compat/**/*.cs" LinkBase="AlphaDefect/Compat" />
+  </ItemGroup>
+
+  <Target Name="CheckPaths" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(AdEngine)/Observation.cs')" Text="AlphaDefect-Public が見つかりません: $(AlphaDefectRepo)（-p:AlphaDefectRepo=... か環境変数 ALPHADEFECT_REPO で指定）" />
+    <Error Condition="!Exists('$(Sts2DataDir)/sts2.dll')" Text="ゲームの sts2.dll が見つかりません: $(Sts2DataDir)（-p:Sts2Path=... で指定）" />
+  </Target>
+
+  <!-- ビルド後に mods/Sts2Hint/ へ dll・マニフェスト・語彙をコピーする。既存のファイルは触らない（このフォルダだけ） -->
+  <Target Name="CopyToModsFolder" AfterTargets="Build" Condition="'$(CopyToMods)' == 'true'">
+    <Copy SourceFiles="$(TargetPath);$(TargetDir)$(TargetName).pdb;Sts2Hint.json;$(AlphaDefectRepo)/engine/catalog/vocab.txt;$(AlphaDefectRepo)/engine/catalog/aliases.txt"
+          DestinationFolder="$(ModsPath)Sts2Hint/" />
+    <Message Importance="high" Text="Sts2Hint を $(ModsPath)Sts2Hint/ にコピーしました" />
+  </Target>
+</Project>
