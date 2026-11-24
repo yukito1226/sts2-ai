@@ -71,6 +71,12 @@ public static class LiveDecision
         Hooks.WatchRestSite();
         Hooks.OnRoom(s.CurrentRoom);
 
+        // 0. 地図：地図を開くと、報酬画面などはオーバーレイに積まれたまま隠れる（NOverlayStack.ShowOverlays は地図が開いている間は出さない）。
+        //    報酬を残して「進む」と、報酬画面が積まれたまま地図で次の部屋を選ぶことになるので、地図をオーバーレイより先に見る
+        //    （見るだけで移動できないときは、下の画面のヒントをそのまま出す）
+        if (!CombatManager.Instance.IsInProgress && NMapScreen.Instance is { IsOpen: true, IsTravelEnabled: true, IsTraveling: false })
+            return Map(s, me, out why);
+
         // 1. いちばん上に出ている画面（ヘッドレスの GetDecisionOnce と同じ優先順：選牌 → カード報酬 → カードパック → 報酬 → Crystal Sphere）
         var overlays = R.F<IList>(NOverlayStack.Instance, "_overlays");
         object? top = overlays is { Count: > 0 } ? overlays[^1] : null;
@@ -92,16 +98,18 @@ public static class LiveDecision
             return HandSelect(run, hand, out why);
         if (inCombat) return Combat(me, out why);
 
-        if (NMapScreen.Instance is { IsOpen: true, IsTravelEnabled: true, IsTraveling: false })
-            return Map(s, me, out why);
         if (Busy()) { why = "処理中"; return null; }
 
         // 3. 部屋ごとの画面（ヘッドレスの s.CurrentRoom switch と同じ順）
+        // イベント部屋に入った直後は、イベントがまだ用意されておらず GetLocalEvent が例外を投げることがある
+        EventModel? localEvent = null;
+        if (s.CurrentRoom is EventRoom)
+            try { localEvent = rm!.EventSynchronizer.GetLocalEvent(); } catch (Exception) { why = "イベントの準備中"; return null; }
         switch (s.CurrentRoom)
         {
-            case EventRoom { CanonicalEvent: FakeMerchant } when rm!.EventSynchronizer.GetLocalEvent() is FakeMerchant { StartedFight: false } fm:
+            case EventRoom { CanonicalEvent: FakeMerchant } when localEvent is FakeMerchant { StartedFight: false } fm:
                 return Shop(fm.Inventory, me, "假商人 ", out why);
-            case EventRoom when rm!.EventSynchronizer.GetLocalEvent() is { IsFinished: false } ev:
+            case EventRoom when localEvent is { IsFinished: false } ev:
                 return Event(ev, me, out why);
             case RestSiteRoom:
                 return Rest(me, out why);

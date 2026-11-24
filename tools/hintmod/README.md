@@ -9,7 +9,7 @@ Slay the Spire 2 のプレイ中に、学習済みの AI「AlphaDefect」が各�
 |---|---|
 | 戦闘（自分のターン） | 手札・ポーション・敵（ゲームの状態） |
 | 戦闘中の選択（手札から選ぶ「武装」など、山札・捨て札から選ぶ画面、3枚から1枚） | 手札の選択モード（`NPlayerHand`）、選牌画面（`NCardGridSelectionScreen` 系、`NChooseACardSelectionScreen`） |
-| 地図の移動先 | 地図画面が開いていて移動できるとき |
+| 地図の移動先 | 地図画面が開いていて移動できるとき（報酬を残して進んだときも、地図を優先） |
 | 報酬画面・カード報酬・カードパック | `NRewardsScreen`、`NCardRewardSelectionScreen`、`NChooseABundleSelectionScreen` |
 | デッキから選ぶ画面（強化・変化・削除・付与など） | 選牌画面（`NDeck…SelectScreen`） |
 | 休息所 | `RestSiteSynchronizer` の選択肢 |
