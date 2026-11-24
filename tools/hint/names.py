@@ -72,6 +72,10 @@ class Namer:
         self._cache[vid] = n
         return n
 
+    def name_of_key(self, k: str) -> str | None:
+        """語彙にないキー（古の存在の選択肢など）でも、翻訳から名前を引く。見つからなければ None。"""
+        return self._lookup(k)
+
     def _lookup(self, k: str) -> str | None:
         if k == "-":
             return None
