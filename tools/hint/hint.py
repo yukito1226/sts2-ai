@@ -254,7 +254,9 @@ def one_line(rec: dict) -> str:
 HELP = """  Enter  ネットの手（1位）で進む       番号   その候補で進む（index）
   l [N]  候補ごとの見込みを計算（N 世界） j      この局面の JSON を表示
   s      盤面を表示
-  a N    ネットの手で N 判断ぶん進む     q      終わる"""
+  a N    ネットの手で N 判断ぶん進む     q      終わる
+  e [質問]  Claude に解説させる（ANTHROPIC_API_KEY が要る。l のあとなら見込みも渡す）
+  ? 質問    解説への聞き返し（例 ? なぜ防御じゃないの？）"""
 
 
 def show(rec: dict, top_n: int) -> None:
@@ -306,6 +308,7 @@ def interactive(a) -> None:
         fh.write(json.dumps({"meta": S.meta()}, ensure_ascii=False) + "\n")
     print(HELP)
     auto_left = 0
+    ex = None           # 解説の会話（explain.py）。局面が変わったら新しく始める
     try:
         o = S.reset()
         while not finished(o):
@@ -313,6 +316,8 @@ def interactive(a) -> None:
             stop = wanted(rec, screens, True) and auto_left <= 0
             act = rec["greedy"]
             if stop:
+                if ex is not None:
+                    ex.messages = []      # 前の局面の会話は持ち越さない
                 if a.lookahead and wanted(rec, look_screens, True):
                     S.lookahead(o, rec)
                 show(rec, a.top)
@@ -336,6 +341,23 @@ def interactive(a) -> None:
                         show(rec, a.top)
                         print(f"  見込み＝その手のあと（戦闘はターンの終わりまで、戦闘外は1手）の価値の、今の価値からの差。±は標準誤差。"
                               f"★＝見込みが最大（{rec['lookahead']['ms']} ms）")
+                        continue
+                    if cmd == "e" or cmd.startswith("e "):
+                        from explain import Explainer
+                        if ex is None:
+                            ex = Explainer(model=a.explain_model, effort=a.explain_effort, top=a.top,
+                                           fallbacks=not a.explain_no_fallbacks)
+                        rec.setdefault("glossary", S.builder.glossary(o))
+                        ex.start(rec, cmd[1:].strip() or None)
+                        continue
+                    if cmd.startswith("?") or cmd.startswith("？"):
+                        q = cmd[1:].strip()
+                        if ex is None or not ex.messages:
+                            print("先に e で解説を始めてください")
+                        elif not q:
+                            print("? の後に質問を書いてください")
+                        else:
+                            ex.ask(q)
                         continue
                     if cmd == "j":
                         print(json.dumps(rec, ensure_ascii=False, indent=1))
@@ -413,7 +435,12 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--quiet", action="store_true")
         else:
             p.add_argument("--out", default=None, help="通った判断を JSONL に書く")
-            p.add_argument("--top", type=int, default=12, help="表示する候補の数")
+            p.add_argument("--top", type=int, default=12, help="表示する候補の数（解説に渡す候補の数も同じ）")
+            p.add_argument("--explain-model", default="claude-opus-5-5", help="解説（e）に使う Claude のモデル")
+            p.add_argument("--explain-effort", default="medium", choices=("low", "medium", "high", "xhigh", "max"),
+                           help="解説の考える深さ（高いほど遅く、料金も上がる）")
+            p.add_argument("--explain-no-fallbacks", action="store_true",
+                           help="解説を断られたときに、サーバー側で別のモデルに答え直させない（既定では答え直させる）")
     return ap
 
 
