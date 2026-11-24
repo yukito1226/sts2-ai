@@ -138,6 +138,25 @@ class Builder:
             s["act_bosses"] = bosses
         return s
 
+    def glossary(self, o) -> dict:
+        """盤面にあるカード・遺物・ポーション・パワーの説明文（ゲームの翻訳ファイルから。数値の差し込み記号はそのまま）。
+
+        解説（explain.py）に渡して、カードの効果を推測させないためのもの。翻訳が見つからないものは入れない。
+        """
+        from names import clean
+        out: dict = {}
+        for k in np.flatnonzero(np.isin(o.tok_ints[:, 0], (TK_CARD, 13, TK_RELIC, TK_POTION, TK_POWER))):
+            vid = int(o.tok_ints[k, 1])
+            if not vid:
+                continue
+            name = self.N.name(vid)
+            if name in out:
+                continue
+            d = clean(self.N.description(vid))
+            if d:
+                out[name] = d
+        return out
+
     # ------------------------------------------------------------ 候補ごとの事実
 
     @staticmethod

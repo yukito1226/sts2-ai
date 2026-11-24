@@ -5,7 +5,7 @@ Slay the Spire 2 のプレイ中の判断に、学習済みのAI「AlphaDefect�
 | 段階 | 内容 | 場所 |
 |---|---|---|
 | Step 1 | ヒント生成：ヘッドレスエンジン上の各判断で、候補ごとの選択確率・価値・この戦闘に勝つ確率・エンジンが計算した事実を JSON に出す（探索なし、CPU） | [`tools/hint/`](tools/hint/README.md) |
-| Step 2 | LLM 解説：Step 1 の JSON と盤面を Claude API に渡し、「なぜその手か」を日本語で説明する。聞き返せるチャット形式 | 未着手 |
+| Step 2 | LLM 解説：Step 1 の JSON と盤面を Claude API に渡し、「なぜその手か」を日本語で説明する。聞き返せるチャット形式（対話モードの `e` と `?`） | [`tools/hint/explain.py`](tools/hint/README.md#claude-による解説step-2対話モードの-e-と-explainpy) |
 | Step 3 | ゲーム画面の上に表示する Mod | 未着手 |
 
 AlphaDefect 本体のコードは書き換えません。本体のチェックアウトを `--ad-repo` か環境変数 `ALPHADEFECT_REPO` で指定して読み込みます。
