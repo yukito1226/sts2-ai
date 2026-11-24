@@ -19,6 +19,7 @@ from names import ACTION_JA, DECISION_JA, Namer
 TK_GLOBAL, TK_CREATURE, TK_POWER, TK_CARD, TK_RELIC, TK_POTION, TK_ORB, TK_MAP_NODE, TK_OPTION, TK_MOVE = 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 Z_ALLY, Z_ENEMY, Z_HAND, Z_DRAW, Z_DISCARD, Z_EXHAUST, Z_DECK = 1, 2, 3, 4, 5, 6, 7
 A_END_TURN, A_PLAY_CARD, A_USE_POTION = 1, 2, 3
+A_EVENT_OPTION = 12
 ROOM_JA = {1: "通常戦闘", 2: "エリート", 3: "ボス"}
 READOUT_KEYS = ("advantage", "hp_change_frac", "enemy_left_change", "win_within", "lose_within")
 
@@ -51,11 +52,36 @@ class Builder:
             name = f"{name}#{int(ti[4])}"             # 同じ敵が並ぶので位置（補助ID）を付ける
         return name
 
+    def option_name(self, o, c: int, a: int) -> str | None:
+        """語彙にないイベントの選択肢（古の存在の遺物の選択肢などは、エンコーダが意図的に <unk> にしている）の表示名。
+
+        ネットには <unk> のまま渡っている（AlphaDefect の Events.cs、F113 の注記）。表示だけ、エンジンのラベル（選択肢の TextKey）から
+        翻訳を引き、なければ選択肢に付いた遺物（記録の補助ID）の名前を使う。
+        """
+        label = o.labels[c] if o.labels and c < len(o.labels) else None
+        if label:
+            nm = self.N.name_of_key("EVENTOPT:" + label)
+            if nm:
+                return nm
+        aux = int(o.tok_ints[a, 4])
+        if aux > 1:
+            return self.N.name(aux)
+        if label:
+            # 古の存在の選択肢は翻訳に選択肢のキーがなく、末尾が遺物の ID（TEZCATARA.pages.INITIAL.options.NUTRITIOUS_SOUP → 遺物「栄養満点のスープ」）
+            nm = self.N.name_of_key("RELIC." + label.split(".")[-1])
+            if nm:
+                return nm
+        if label:
+            return label.split(".")[-1]
+        return None
+
     def cand_name(self, o, c: int) -> dict:
         ci = o.cand_ints[c]
         kind, a, b, vid = int(ci[0]), int(ci[1]), int(ci[2]), int(ci[3])
         an, bn = self.token_name(o, a), self.token_name(o, b)
         key_name = self.N.name(vid) if vid else None
+        if kind == A_EVENT_OPTION and 0 <= a < len(o.tok_ints) and int(o.tok_ints[a, 1]) <= 1:
+            an = self.option_name(o, c, a)
         action = ACTION_JA.get(kind, str(kind))
         if kind == A_END_TURN:
             text = "ターン終了"
