@@ -93,6 +93,13 @@ class Namer:
         if k.startswith("EVENTOPT:"):
             key = k[9:]
             nm = self._get("events", f"{key}.title") or self._get("ancients", f"{key}.title")
+            if nm is None and ".options." in key:
+                # 古の存在（ネオー、テスカタラなど）の選択肢は翻訳にキーがなく、末尾が遺物の ID（NEOW.pages.INITIAL.options.LEAFY_POULTICE
+                # → 遺物「薬草の湿布」）。2026-11-24 に実機の翻訳ファイルで確認。遺物名だけを返す（古の存在の名前は付けない）
+                tail = key.rsplit(".", 1)[-1]
+                rel = self._get("relics", f"{tail}.title")
+                if rel:
+                    return rel
             ev = key.split(".")[0]
             evname = self._get("events", f"{ev}.title") or self._get("ancients", f"{ev}.title")
             return f"{evname}・{nm}" if (evname and nm) else nm

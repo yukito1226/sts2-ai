@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tools" / "hint"))
 from names import Namer  # noqa: E402
 from record import Builder, TK_OPTION, TK_RELIC  # noqa: E402
 
-VOCAB = ["<pad>", "<unk>", "RELIC.GOLDEN_COMPASS", "CARD.SOOT"]
+VOCAB = ["<pad>", "<unk>", "RELIC.GOLDEN_COMPASS", "CARD.SOOT", "EVENTOPT:NEOW.pages.INITIAL.options.LEAFY_POULTICE"]
 
 
 def frame(labels, aux):
@@ -39,7 +39,8 @@ class TestOptionName(unittest.TestCase):
         (root / "jpn" / "ancients.json").write_text(json.dumps({
             "TEZCATARA.title": "テスカタラ",
             "TEZCATARA.pages.INITIAL.options.NUTRITIOUS_SOUP.title": "栄養満点のスープ"}, ensure_ascii=False), encoding="utf-8")
-        (root / "jpn" / "relics.json").write_text(json.dumps({"GOLDEN_COMPASS.title": "黄金の羅針盤", "BIIIG_HUG.title": "アツアツの愛情"},
+        (root / "jpn" / "relics.json").write_text(json.dumps({"GOLDEN_COMPASS.title": "黄金の羅針盤", "BIIIG_HUG.title": "アツアツの愛情",
+                                                          "LEAFY_POULTICE.title": "薬草の湿布"},
                                                          ensure_ascii=False), encoding="utf-8")
         (root / "jpn" / "cards.json").write_text(json.dumps({"SOOT.title": "すす"}, ensure_ascii=False), encoding="utf-8")
         self.B = Builder(Namer(VOCAB, root, ["jpn"]))
@@ -59,6 +60,10 @@ class TestOptionName(unittest.TestCase):
         """実機の翻訳ファイルでは、古の存在の選択肢のキーはなく、末尾が遺物の ID になっている（2026-11-24 確認）。"""
         o = frame(["TEZCATARA.pages.INITIAL.options.BIIIG_HUG"], 0)
         self.assertTrue(self.B.cand_name(o, 0)["text"].startswith("アツアツの愛情"))
+
+    def test_neow_option_in_vocab(self):
+        """ネオーの選択肢は語彙にある（<unk> ではない）が、翻訳にキーがない。末尾の遺物名で出す。"""
+        self.assertEqual(self.B.N.name(4), "薬草の湿布")
 
     def test_last_resort_key(self):
         o = frame(["SOMEWHERE.pages.INITIAL.options.ODD_THING"], 0)
