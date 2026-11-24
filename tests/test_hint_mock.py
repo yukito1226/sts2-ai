@@ -237,6 +237,53 @@ class TestAutoplay(Base):
         self.assertEqual(recs[1]["chosen"], 2)
 
 
+class TestLookahead(Base):
+    def test_mock_snapshot_restore(self):
+        """モックエンジンの snapshot / restore が同じ局面を返す（先読みの前提）。"""
+        from engine import Engine, mock_cmd
+        cmd, env = mock_cmd()
+        env["ALPHADEFECT_REPO"] = str(REPO)
+        with Engine(cmd, env) as e:
+            base = {"op": "reset", "mode": "run", "character": "IRONCLAD", "ascension": 10, "seed": "T", "labels": True}
+            f1 = e.request({**base, "replay": [0], "snapshot": 0})
+            a = e.request({"op": "restore", "slot": 0, "reseed": 7, "first": 0})
+            b = e.request({"op": "restore", "slot": 0, "reseed": 7, "first": 0})
+            self.assertEqual(a, b)
+            c = e.request({"op": "restore", "slot": 0})
+            # 戦闘開始の付加情報（extra）は最初のフレームにだけ付くので、そこより前（観測の本体とラベル）を比べる
+            self.assertEqual(c[:len(c)], f1[:len(c)])
+
+    def test_lookahead_does_not_change_play(self):
+        """先読みを付けても、実際に選ぶ手と結果は変わらない（先読みは別のエンジンで行う）。"""
+        runs = {}
+        for name, extra in (("plain", []), ("look", ["--lookahead", "2"])):
+            out = self.tmp / f"la_{name}.jsonl"
+            r = run_hint(["autoplay", "--mock", "--allow-unlisted", "--ckpt", str(self.ckpt), "--out", str(out), "--quiet", *extra])
+            self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+            runs[name] = read_jsonl(out)
+        strip = lambda rows: [(x.get("step"), x.get("chosen"), x.get("result")) for x in rows if "meta" not in x]
+        self.assertEqual(strip(runs["plain"]), strip(runs["look"]))
+        recs = [x for x in runs["look"] if "net" in x]
+        for x in recs:
+            afters = [c["after"] for c in x["candidates"] if "after" in c]
+            self.assertEqual(len(afters), x["decision"]["num_candidates"])
+            self.assertTrue(any(a["best_by_lookahead"] for a in afters))
+            for a in afters:
+                self.assertEqual(a["n"], 2)
+                self.assertEqual(a["horizon"], "end_of_turn" if x["decision"]["phase"] == "combat" else "one_step")
+        c0 = [x for x in recs if x["decision"]["phase"] == "combat"][0]
+        end = [c for c in c0["candidates"] if c["action_kind"] == 1][0]["after"]
+        self.assertEqual(end["hp_mean"], c0["state"]["hp"] - 6)        # すぐターンを終えると、モックの敵の 6 ダメージを受ける
+        strikes = [c for c in c0["candidates"] if c.get("a_key") == "CARD.STRIKE_IRONCLAD"]
+        self.assertEqual(strikes[1]["after"].get("same_as"), strikes[0]["index"])   # 同じ手は1回だけ計算して写す
+
+    def test_interactive_lookahead_command(self):
+        r = run_hint(["interactive", "--mock", "--allow-unlisted", "--ckpt", str(self.ckpt)], stdin="\nl 2\nq\n")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("見込み", r.stdout)
+        self.assertIn("★", r.stdout)
+
+
 class TestNamesAndWinprob(unittest.TestCase):
     def test_localized_names(self):
         from names import Namer

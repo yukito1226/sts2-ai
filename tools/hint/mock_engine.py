@@ -216,8 +216,21 @@ def error(msg: str) -> None:
     reply(struct.pack("<i", -1) + msg.encode("utf-8"))
 
 
+def n_cands(frame: bytes) -> int:
+    return struct.unpack_from("<i", frame, 12)[0]      # ヘッダ 3 = 候補の数
+
+
+def done(frame: bytes) -> bool:
+    return struct.unpack_from("<i", frame, 16)[0] != 0  # ヘッダ 4 = 終局
+
+
 def main() -> None:
+    """実機エンジンの要求のうち、ツールが使うものだけを受け付ける:
+    reset（replay・snapshot つき）、step、snapshot、restore（replay・reseed・first・snapshot）、drop、auto_single。
+    reseed は受け付けるが、モックには乱数がないので何も変えない。"""
+    import copy
     game: Game | None = None
+    slots: dict[int, Game] = {}
     for line in sys.stdin.buffer:
         if not line.strip():
             continue
@@ -225,20 +238,57 @@ def main() -> None:
         op = req.get("op")
         if op == "close":
             return
+        if op == "snapshot":
+            if game is None:
+                error("局面がありません")
+                continue
+            slots[int(req.get("slot", 0))] = copy.deepcopy(game)
+            reply(json.dumps({"slot": int(req.get("slot", 0)), "objects": 1, "ms": 0}).encode("utf-8"))
+            continue
+        if op == "drop":
+            if "slot" in req:
+                slots.pop(int(req["slot"]), None)
+            else:
+                slots.clear()
+            reply(json.dumps({"dropped": 1, "slots": len(slots)}).encode("utf-8"))
+            continue
         if op == "reset":
             if req.get("mode") != "run":
                 error("モックは整局モードだけ")
                 continue
             game = Game(req)
-            reply(game.frame())
+        elif op == "restore":
+            sl = int(req.get("slot", 0))
+            if sl not in slots:
+                error(f"スロット {sl} は空です")
+                continue
+            game = copy.deepcopy(slots[sl])
+            game.labels = game.labels or bool(req.get("labels"))
         elif op == "step":
             if game is None:
                 error("reset の前に step が来ました")
                 continue
-            game.step(int(req["action"]))
-            reply(game.frame())
         else:
             error(f"モックが知らない要求: {op}")
+            continue
+        if op in ("reset", "restore"):
+            for x in req.get("replay") or []:
+                game.step(int(x))
+            if op == "restore" and "first" in req:
+                game.step(int(req["first"]))
+        if op == "step":
+            game.step(int(req["action"]))
+        fr = game.frame()
+        if req.get("auto_single"):
+            cap = 10000 if req["auto_single"] is True else int(req["auto_single"])
+            k = 0
+            while k < cap and n_cands(fr) == 1 and not done(fr):
+                game.step(0)
+                fr = game.frame()
+                k += 1
+        if "snapshot" in req and isinstance(req["snapshot"], int) and not isinstance(req["snapshot"], bool):
+            slots[int(req["snapshot"])] = copy.deepcopy(game)
+        reply(fr)
 
 
 if __name__ == "__main__":
