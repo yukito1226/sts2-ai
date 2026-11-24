@@ -73,6 +73,11 @@ def fit(rows: list[tuple[float, int, int, str]], bins: int) -> dict:
 
 
 def main() -> None:
+    for f in (sys.stdout, sys.stderr):      # Windows（cp932）でも日本語を書けるように
+        try:
+            f.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("logs", nargs="+", help="hint.py autoplay の JSONL（何局分でも）")
     ap.add_argument("--out", required=True)

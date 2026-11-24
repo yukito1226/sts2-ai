@@ -39,7 +39,7 @@ class _Evil:
 
 def run_hint(args: list[str], stdin: str | None = None) -> subprocess.CompletedProcess:
     env = dict(os.environ, ALPHADEFECT_REPO=str(REPO))
-    return subprocess.run([sys.executable, "-I", str(HINT / "hint.py"), *args], input=stdin, capture_output=True, text=True,
+    return subprocess.run([sys.executable, "-I", str(HINT / "hint.py"), *args], input=stdin, capture_output=True, text=True, encoding="utf-8",
                           env=env, timeout=300)
 
 
@@ -213,7 +213,8 @@ class TestAutoplay(Base):
         logs = sorted(str(p) for p in d.glob("*.jsonl"))
         self.assertEqual(len(logs), 3)
         cal = self.tmp / "calib.json"
-        r = subprocess.run([sys.executable, "-I", str(HINT / "calibrate.py"), *logs, "--out", str(cal)], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-I", str(HINT / "calibrate.py"), *logs, "--out", str(cal)], capture_output=True, text=True,
+                           encoding="utf-8")
         self.assertEqual(r.returncode, 0, r.stderr)
         c = json.loads(cal.read_text(encoding="utf-8"))
         self.assertEqual(c["runs"], 3)

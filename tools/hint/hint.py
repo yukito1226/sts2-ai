@@ -64,6 +64,7 @@ class Session:
         self.eng = Engine(cmd, env, log or subprocess.DEVNULL)
         self.max_hp0 = None
         self.steps = 0
+        self.last_hp = None
 
     def meta(self) -> dict:
         c = self.L.config
@@ -90,6 +91,7 @@ class Session:
         o = parse(self.eng.request(req))
         self.max_hp0 = int(o.max_hp) or None
         self.steps = 0
+        self.last_hp = None
         return o
 
     def step(self, action: int):
@@ -101,6 +103,7 @@ class Session:
         from infer import evaluate
         from sts2rl.greedy import equivalence_classes
         out = evaluate(self.L.net, o, self.a.device)
+        self.last_hp = int(o.hp)
         if self.max_hp0 is None:
             self.max_hp0 = int(o.max_hp) or 1
         wp = self.wp.estimate(out.value, int(o.act), float(o.hp), float(o.max_hp), float(self.max_hp0))
@@ -139,9 +142,11 @@ def finished(o) -> bool:
     return bool(o.done or o.stuck or o.num_actions == 0)
 
 
-def result_of(o, steps: int) -> dict:
+def result_of(o, steps: int, last_hp: int | None = None) -> dict:
+    # 終局フレームのヘッダの HP は、クリアしても 0 になることがある（実機の v0.113.1 で確認。エンジンがプレイヤーの CurrentHp をそのまま出すため）。
+    # そこで、最後の判断のときの HP を hp_last_decision として別に残す
     return {"result": {"win": bool(o.victory and not o.stuck), "done": bool(o.done), "stuck": bool(o.stuck), "act": int(o.act) + 1,
-                       "floor": int(o.floor), "hp": int(o.hp), "steps": steps}}
+                       "floor": int(o.floor), "hp_end_frame": int(o.hp), "hp_last_decision": last_hp, "steps": steps}}
 
 
 # ---------------------------------------------------------------- autoplay
@@ -166,7 +171,7 @@ def play_one(S: Session, out: Path, screens, a) -> dict:
             if S.steps > a.max_steps:
                 print(f"手数が上限（{a.max_steps}）を超えたので止めます", flush=True)
                 break
-        res = result_of(o, S.steps)
+        res = result_of(o, S.steps, S.last_hp)
         fh.write(json.dumps(res, ensure_ascii=False) + "\n")
     r = res["result"]
     print(f"{S.a.seed}: {'クリア' if r['win'] else '敗北/停止'}、第{r['act']}幕 {r['floor']}階、{S.steps}手、記録 {n_rec} 件、"
@@ -302,9 +307,9 @@ def interactive(a) -> None:
                 fh.write(json.dumps(rec, ensure_ascii=False) + "\n")
                 fh.flush()
             o = S.step(act)
-        print(json.dumps(result_of(o, S.steps), ensure_ascii=False))
+        print(json.dumps(result_of(o, S.steps, S.last_hp), ensure_ascii=False))
         if fh:
-            fh.write(json.dumps(result_of(o, S.steps), ensure_ascii=False) + "\n")
+            fh.write(json.dumps(result_of(o, S.steps, S.last_hp), ensure_ascii=False) + "\n")
     except KeyboardInterrupt:
         print("終了します")
     finally:
@@ -352,7 +357,17 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def utf8_stdio() -> None:
+    """Windows のコンソールやパイプ（cp932）でも、簡体字を含むエンジンの文字列や JSON を書けるようにする。"""
+    for f in (sys.stdout, sys.stderr):
+        try:
+            f.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv: list[str] | None = None) -> None:
+    utf8_stdio()
     a = build_parser().parse_args(argv)
     {"autoplay": autoplay, "interactive": interactive}[a.mode](a)
 
