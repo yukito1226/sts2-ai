@@ -39,7 +39,8 @@ class TestOptionName(unittest.TestCase):
         (root / "jpn" / "ancients.json").write_text(json.dumps({
             "TEZCATARA.title": "テスカタラ",
             "TEZCATARA.pages.INITIAL.options.NUTRITIOUS_SOUP.title": "栄養満点のスープ"}, ensure_ascii=False), encoding="utf-8")
-        (root / "jpn" / "relics.json").write_text(json.dumps({"GOLDEN_COMPASS.title": "黄金の羅針盤"}, ensure_ascii=False), encoding="utf-8")
+        (root / "jpn" / "relics.json").write_text(json.dumps({"GOLDEN_COMPASS.title": "黄金の羅針盤", "BIIIG_HUG.title": "アツアツの愛情"},
+                                                         ensure_ascii=False), encoding="utf-8")
         (root / "jpn" / "cards.json").write_text(json.dumps({"SOOT.title": "すす"}, ensure_ascii=False), encoding="utf-8")
         self.B = Builder(Namer(VOCAB, root, ["jpn"]))
 
@@ -53,6 +54,11 @@ class TestOptionName(unittest.TestCase):
     def test_from_relic(self):
         o = frame(["TEZCATARA.pages.INITIAL.options.GOLDEN_COMPASS"], 2)
         self.assertTrue(self.B.cand_name(o, 0)["text"].startswith("黄金の羅針盤"))
+
+    def test_ancient_option_tail_is_relic(self):
+        """実機の翻訳ファイルでは、古の存在の選択肢のキーはなく、末尾が遺物の ID になっている（2026-11-24 確認）。"""
+        o = frame(["TEZCATARA.pages.INITIAL.options.BIIIG_HUG"], 0)
+        self.assertTrue(self.B.cand_name(o, 0)["text"].startswith("アツアツの愛情"))
 
     def test_last_resort_key(self):
         o = frame(["SOMEWHERE.pages.INITIAL.options.ODD_THING"], 0)

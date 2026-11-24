@@ -67,6 +67,11 @@ class Builder:
         if aux > 1:
             return self.N.name(aux)
         if label:
+            # 古の存在の選択肢は翻訳に選択肢のキーがなく、末尾が遺物の ID（TEZCATARA.pages.INITIAL.options.NUTRITIOUS_SOUP → 遺物「栄養満点のスープ」）
+            nm = self.N.name_of_key("RELIC." + label.split(".")[-1])
+            if nm:
+                return nm
+        if label:
             return label.split(".")[-1]
         return None
 
