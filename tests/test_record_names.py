@@ -92,3 +92,22 @@ class TestMapPositions(unittest.TestCase):
 
     def test_four(self):
         self.assertEqual(self.positions([15] * 4)[3], "左から4番目")
+
+
+class TestRankByGroup(unittest.TestCase):
+    """同じカード2枚（27.6% ずつ、合わせて 55.3%）は、1枚だけの防御（35.1%）より上に並ぶ（2026-11-25 の実機の表示）。"""
+
+    def test_merged_first(self):
+        from types import SimpleNamespace as NS
+        B = Builder(Namer(VOCAB, None, ["jpn"]))
+        n = 4
+        o = NS(num_actions=n, decision=1, in_combat=False, cand_ints=np.array([[2, -1, -1, 0, 0]] * 3 + [[1, -1, -1, 0, 0]], np.int64),
+               tok_ints=np.zeros((1, 5), np.int64), tok_feats=np.zeros((1, 30), np.float32), labels=None,
+               act=0, floor=1, hp=1, max_hp=1, gold=0)
+        B.state = lambda o: {}
+        B.cand_facts = lambda o, c: {}
+        out = NS(probs=np.array([0.351, 0.2765, 0.2765, 0.096]), readout=None, value=0.0, v_scalar=0.0, is_macro=True, combat_win_logit=None)
+        rec = B.build(o, out, None, merge_classes=[0, 1, 1, 3])
+        self.assertEqual([c["index"] for c in rec["candidates"]], [1, 2, 0, 3])
+        self.assertAlmostEqual(rec["candidates"][0]["group_prob"], 0.553, places=3)
+        self.assertEqual(rec["greedy"], 0)

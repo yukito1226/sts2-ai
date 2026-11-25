@@ -168,9 +168,12 @@ class TestAutoplay(Base):
             ps = [c["prob"] for c in x["candidates"]]
             self.assertAlmostEqual(sum(ps), 1.0, places=3)
             self.assertEqual([c["rank"] for c in x["candidates"]], list(range(1, len(ps) + 1)))
-            self.assertEqual(ps, sorted(ps, reverse=True))
+            # 並びは、同じ手をまとめた確率（なければ個々の確率）の大きい順
+            gs = [c.get("group_prob", c["prob"]) for c in x["candidates"]]
+            self.assertEqual(gs, sorted(gs, reverse=True))
             self.assertEqual(x["chosen"], x["greedy"])
-            self.assertEqual(x["candidates"][0]["index"], x["greedy"])
+            # 実行する手は今までどおり個々の確率の最大
+            self.assertEqual(max(x["candidates"], key=lambda c: (c["prob"], -c["index"]))["index"], x["greedy"])
         combat = [x for x in recs if x["decision"]["phase"] == "combat"]
         c0 = combat[0]
         self.assertIn("combat_win_prob", c0["net"])
