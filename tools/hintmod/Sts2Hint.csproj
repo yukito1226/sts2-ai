@@ -33,7 +33,8 @@
     <Compile Remove="bin/**;obj/**" />
     <!-- 本家の Sts2Bridge と同じ取り込み方（engine/Directory.Build.targets）に、Decision と Vocab を足したもの -->
     <Compile Include="$(AdEngine)/Observation.cs;$(AdEngine)/ObservationOracle.cs;$(AdEngine)/Decision.cs;$(AdEngine)/Vocab.cs" LinkBase="AlphaDefect" />
-    <Compile Include="$(AdEngine)/Obs/**/*.cs" LinkBase="AlphaDefect/Obs" />
+    <!-- Fool.cs と Gains26.cs は PatchAlphaDefectForGame が置き換えた写しを使う -->
+    <Compile Include="$(AdEngine)/Obs/**/*.cs" Exclude="$(AdEngine)/Obs/Characters/Fool.cs;$(AdEngine)/Obs/Gains26.cs" LinkBase="AlphaDefect/Obs" />
     <Compile Include="$(AdEngine)/Compat/**/*.cs" LinkBase="AlphaDefect/Compat" />
   </ItemGroup>
 
@@ -53,7 +54,6 @@
     <WriteLinesToFile File="$(AdPatchDir)Fool.cs" Lines="$(_Fool)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <WriteLinesToFile File="$(AdPatchDir)Gains26.cs" Lines="$(_Gains)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <ItemGroup>
-      <Compile Remove="$(AdEngine)/Obs/Characters/Fool.cs;$(AdEngine)/Obs/Gains26.cs" />
       <Compile Include="$(AdPatchDir)Fool.cs;$(AdPatchDir)Gains26.cs" />
     </ItemGroup>
   </Target>
