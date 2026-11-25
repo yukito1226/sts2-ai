@@ -33,9 +33,30 @@
     <Compile Remove="bin/**;obj/**" />
     <!-- 本家の Sts2Bridge と同じ取り込み方（engine/Directory.Build.targets）に、Decision と Vocab を足したもの -->
     <Compile Include="$(AdEngine)/Observation.cs;$(AdEngine)/ObservationOracle.cs;$(AdEngine)/Decision.cs;$(AdEngine)/Vocab.cs" LinkBase="AlphaDefect" />
-    <Compile Include="$(AdEngine)/Obs/**/*.cs" LinkBase="AlphaDefect/Obs" />
+    <!-- Fool.cs と Gains26.cs は PatchAlphaDefectForGame が置き換えた写しを使う -->
+    <Compile Include="$(AdEngine)/Obs/**/*.cs" Exclude="$(AdEngine)/Obs/Characters/Fool.cs;$(AdEngine)/Obs/Gains26.cs" LinkBase="AlphaDefect/Obs" />
     <Compile Include="$(AdEngine)/Compat/**/*.cs" LinkBase="AlphaDefect/Compat" />
   </ItemGroup>
+
+  <!-- v0.114.0 で消えた名前を使う AlphaDefect のファイルは、ビルドのたびに obj/ad114/ へ写して置き換えてから使う（本家のファイルは変えない）。
+       置き換え後のコードは v0.113.1 でも v0.114.0 でも同じ意味でコンパイルできる（名前を文字列で比べ、なければ 0 にする）。 -->
+  <Target Name="PatchAlphaDefectForGame" BeforeTargets="BeforeBuild;CoreCompile" Condition="Exists('$(AdEngine)/Obs/Gains26.cs')">
+    <PropertyGroup>
+      <AdPatchDir>$(BaseIntermediateOutputPath)ad114/</AdPatchDir>
+      <_Fool>$([System.IO.File]::ReadAllText('$(AdEngine)/Obs/Characters/Fool.cs'))</_Fool>
+      <_Fool>$(_Fool.Replace('a.Status == ArrowStatus.Destroyed', 'a.Status.ToString() == &quot;Destroyed&quot;'))</_Fool>
+      <_Fool>$(_Fool.Replace('MegaCrit.Sts2.Core.Commands.MelodyCmd.MelodyCardsPlayedThisTurn(me)', 'Sts2Hint.GameCompat.MelodyCardsPlayedThisTurn(me)'))</_Fool>
+      <_Gains>$([System.IO.File]::ReadAllText('$(AdEngine)/Obs/Gains26.cs'))</_Gains>
+      <_Gains>$(_Gains.Replace('l is FreeCardPower or FreeAttackPower or FreeSkillPower or FreePowerPower', 'Sts2Hint.GameCompat.IsFreeCardPower(l) || l is FreeAttackPower or FreeSkillPower or FreePowerPower'))</_Gains>
+      <_Gains>$(_Gains.Replace('FreeCardPower => pw.Amount,', '_ when Sts2Hint.GameCompat.IsFreeCardPower(pw) => pw.Amount,'))</_Gains>
+    </PropertyGroup>
+    <MakeDir Directories="$(AdPatchDir)" />
+    <WriteLinesToFile File="$(AdPatchDir)Fool.cs" Lines="$(_Fool)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <WriteLinesToFile File="$(AdPatchDir)Gains26.cs" Lines="$(_Gains)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(AdPatchDir)Fool.cs;$(AdPatchDir)Gains26.cs" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="CheckPaths" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(AdEngine)/Observation.cs')" Text="AlphaDefect-Public が見つかりません: $(AlphaDefectRepo)（-p:AlphaDefectRepo=... か環境変数 ALPHADEFECT_REPO で指定）" />

@@ -125,6 +125,8 @@ public static class LiveDecision
     static bool Busy()
     {
         var rm = RunManager.Instance;
+        // ランの開始直後は ActionQueueSet などがまだ null のことがある（v0.114.0 のメインメニューで確認）
+        if (rm?.ActionQueueSet == null || rm.ActionExecutor == null) return true;
         return !rm.ActionQueueSet.IsEmpty || rm.ActionExecutor.IsRunning;
     }
 
