@@ -231,14 +231,19 @@ class Builder:
         from winprob import sigmoid
         n = int(o.num_actions)
         p = out.probs
-        order = list(np.argsort(-p, kind="stable"))
-        rank = {int(c): r + 1 for r, c in enumerate(order)}
         group_p, size = None, None
         if merge_classes is not None and n:
             tot = np.zeros(n)
             np.add.at(tot, np.asarray(merge_classes), p)
             group_p = [float(tot[merge_classes[c]]) for c in range(n)]
             size = np.bincount(np.asarray(merge_classes), minlength=n)
+        # 順位は、見分けのつかない同じ手（同じカード2枚など）をまとめた確率で付ける（表示もまとめた確率なので、個々の確率で並べると
+        # 「35% の防御」が「2枚合わせて 55% の毒の一刺し」より上に来てしまう）。同じ手どうしは並べて置く
+        if group_p is not None:
+            order = sorted(range(n), key=lambda c: (-group_p[c], merge_classes[c], c))
+        else:
+            order = [int(c) for c in np.argsort(-p[:n], kind="stable")]
+        rank = {int(c): r + 1 for r, c in enumerate(order)}
         where = self.map_positions(o, n)
         cands = []
         for c in range(n):
@@ -265,7 +270,7 @@ class Builder:
         if o.in_combat and out.combat_win_logit is not None:
             net["combat_win_prob"] = _r(sigmoid(out.combat_win_logit))
             net["combat_hp_loss_frac"] = _r(out.combat_hp_loss)
-        top = order[0] if n else None
+        top = int(np.argmax(p[:n])) if n else None     # 実行に使う手は今までどおり個々の確率の最大（まとめるのは hint.py --merge-equiv のとき）
         rec = {"decision": {"kind": int(o.decision), "screen": DECISION_JA.get(int(o.decision), str(int(o.decision))),
                             "phase": "combat" if o.in_combat else "out_of_combat", "num_candidates": n},
                "state": self.state(o), "net": net, "candidates": cands,
