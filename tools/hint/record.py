@@ -20,6 +20,7 @@ TK_GLOBAL, TK_CREATURE, TK_POWER, TK_CARD, TK_RELIC, TK_POTION, TK_ORB, TK_MAP_N
 Z_ALLY, Z_ENEMY, Z_HAND, Z_DRAW, Z_DISCARD, Z_EXHAUST, Z_DECK = 1, 2, 3, 4, 5, 6, 7
 A_END_TURN, A_PLAY_CARD, A_USE_POTION = 1, 2, 3
 A_EVENT_OPTION = 12
+A_MAP_MOVE = 15
 ROOM_JA = {1: "通常戦闘", 2: "エリート", 3: "ボス"}
 READOUT_KEYS = ("advantage", "hp_change_frac", "enemy_left_change", "win_within", "lose_within")
 
@@ -95,7 +96,7 @@ class Builder:
                 if p not in uniq:
                     uniq.append(p)
             text = " / ".join(uniq) if uniq else action
-            if bn and kind not in (15,):            # 15 = マップ移動（対象Bは経路の要約で、名前にならない）
+            if bn and kind != A_MAP_MOVE:            # 15 = マップ移動（対象Bは経路の要約で、名前にならない）
                 text += f" → {bn}"
         out = {"action": action, "action_kind": kind, "text": text}
         if a >= 0 and a < len(o.tok_ints):
@@ -209,6 +210,20 @@ class Builder:
         f["raw"] = [_r(x, 3) for x in cf]
         return f
 
+    @staticmethod
+    def map_positions(o, n: int) -> dict[int, str]:
+        """地図の行き先が2つ以上あるとき、画面の左から見た位置（左・中央・右、4つ以上は「左から k 番目」）。
+
+        候補はエンジン（RunSession.MapDecision）も Mod（LiveDecision.Map）も列の小さい順に並べているので、その順が左からの順になる。
+        行き先が同じ種類（通常戦闘が3つなど）だと名前だけでは見分けがつかないため。
+        """
+        ms = [c for c in range(n) if int(o.cand_ints[c, 0]) == A_MAP_MOVE]
+        k = len(ms)
+        if k < 2:
+            return {}
+        names = {2: ["左", "右"], 3: ["左", "中央", "右"]}.get(k) or [f"左から{i + 1}番目" for i in range(k)]
+        return dict(zip(ms, names))
+
     # ------------------------------------------------------------ 組み立て
 
     def build(self, o, out, wp_est: dict | None, chosen: int | None = None, merge_classes: list[int] | None = None,
@@ -224,9 +239,13 @@ class Builder:
             np.add.at(tot, np.asarray(merge_classes), p)
             group_p = [float(tot[merge_classes[c]]) for c in range(n)]
             size = np.bincount(np.asarray(merge_classes), minlength=n)
+        where = self.map_positions(o, n)
         cands = []
         for c in range(n):
             e = {"index": c, **self.cand_name(o, c), "prob": _r(p[c], 5), "rank": rank[c]}
+            if c in where:
+                e["text"] += f"（{where[c]}）"
+                e["position"] = where[c]
             if group_p is not None and size[merge_classes[c]] > 1:
                 e["group_prob"] = _r(group_p[c], 5)        # 見分けのつかない同じ手（同じカード2枚など）をまとめた確率
                 e["same_as"] = int(merge_classes[c])

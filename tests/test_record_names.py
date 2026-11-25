@@ -72,3 +72,23 @@ class TestOptionName(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMapPositions(unittest.TestCase):
+    """地図の行き先は列の小さい順に並んでいるので、その順に左・中央・右を付ける（同じ種類が並ぶと名前だけでは見分けがつかない）。"""
+
+    def positions(self, kinds):
+        ci = np.array([[k, -1, -1, 0, 0] for k in kinds], np.int64)
+        return Builder.map_positions(SimpleNamespace(cand_ints=ci), len(kinds))
+
+    def test_three(self):
+        self.assertEqual(self.positions([15, 15, 15]), {0: "左", 1: "中央", 2: "右"})
+
+    def test_two_with_potion(self):
+        self.assertEqual(self.positions([15, 15, 3]), {0: "左", 1: "右"})
+
+    def test_one_has_none(self):
+        self.assertEqual(self.positions([15]), {})
+
+    def test_four(self):
+        self.assertEqual(self.positions([15] * 4)[3], "左から4番目")
