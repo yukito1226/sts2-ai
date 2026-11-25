@@ -8,6 +8,8 @@ Slay the Spire 2 のプレイ中の判断に、学習済みのAI「AlphaDefect�
 | Step 2 | LLM 解説：Step 1 の JSON と盤面を Claude API に渡し、「なぜその手か」を日本語で説明する。聞き返せるチャット形式（対話モードの `e` と `?`） | [`tools/hint/explain.py`](tools/hint/README.md#claude-による解説step-2対話モードの-e-と-explainpy) |
 | Step 3 | ゲーム画面にヒントを出す Mod（戦闘・地図・報酬・ショップ・休息所・イベント・選牌など）と、ローカルのヒントサーバー | [`tools/hintmod/`](tools/hintmod/README.md)、[`tools/hint/server.py`](tools/hint/server.py) |
 
+追加学習（PPO の再開）の採集を速くする試みと、その確認用の道具は [`tools/finetune/`](tools/finetune/README.md) にあります。
+
 AlphaDefect 本体のコードは書き換えません。本体のチェックアウトを `--ad-repo` か環境変数 `ALPHADEFECT_REPO` で指定して読み込みます。
 重みは配布されている学習済みのものだけを使い、読み込む前に SHA-256 を本体の `weights/SHA256SUMS_*.txt` と照合し、`torch.load(..., weights_only=True)` で読みます。
 
