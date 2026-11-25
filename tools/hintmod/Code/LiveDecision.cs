@@ -176,6 +176,13 @@ public static class LiveDecision
     static Decision? GridSelect(RunSession run, NCardGridSelectionScreen grid, Player me, out string why)
     {
         var cards = R.F<IReadOnlyList<CardModel>>(grid, "_cards");
+        // 山札・捨て札・廃棄札から選ぶ画面（NCombatPileCardSelectScreen、CardSelectCmd.FromCombatPile）は _cards を空のままにし、
+        // _pile と _filter から並べている。候補はヘッドレスのセレクターに渡るのと同じ「pile.Cards（_filter があれば絞ったもの）」
+        if (R.F<CardPile>(grid, "_pile") is { } pile)
+        {
+            var filter = R.F<Func<CardModel, bool>>(grid, "_filter");
+            cards = filter == null ? pile.Cards : pile.Cards.Where(filter).ToList();
+        }
         var prefs = R.V<CardSelectorPrefs>(grid, "_prefs");
         var sel = R.F<IEnumerable<CardModel>>(grid, "_selectedCards");
         if (cards == null || prefs == null) { why = $"選牌画面を読めません（{grid.GetType().Name}）"; return null; }
